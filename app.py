@@ -172,17 +172,37 @@ with st.sidebar:
     )
     if uploaded is not None:
         try:
-            df_baru = pd.read_csv(uploaded, parse_dates=["Tanggal"])
-            if {"Tanggal", "Jumlah_Pengeluaran_BPKB"}.issubset(df_baru.columns):
-                st.session_state.df_data = (
-                    pd.concat([st.session_state.df_data, df_baru])
-                    .drop_duplicates(subset="Tanggal", keep="last")
-                    .sort_values("Tanggal")
-                    .reset_index(drop=True)
-                )
-                st.success(f"✅ {len(df_baru)} baris data berhasil ditambahkan/diperbarui.")
-            else:
+            df_baru = pd.read_csv(uploaded)
+            if not {"Tanggal", "Jumlah_Pengeluaran_BPKB"}.issubset(df_baru.columns):
                 st.error("Kolom CSV harus bernama: Tanggal, Jumlah_Pengeluaran_BPKB")
+            else:
+                df_baru["Tanggal"] = pd.to_datetime(df_baru["Tanggal"], errors="coerce")
+                n_invalid = df_baru["Tanggal"].isna().sum()
+                df_baru = df_baru.dropna(subset=["Tanggal"])
+
+                if df_baru.empty:
+                    st.error(
+                        "Kolom 'Tanggal' tidak dikenali sebagai tanggal. "
+                        "Gunakan format YYYY-MM-DD, contoh: 2026-01-01."
+                    )
+                else:
+                    df_baru["Jumlah_Pengeluaran_BPKB"] = pd.to_numeric(
+                        df_baru["Jumlah_Pengeluaran_BPKB"], errors="coerce"
+                    )
+                    df_baru = df_baru.dropna(subset=["Jumlah_Pengeluaran_BPKB"])
+
+                    st.session_state.df_data = (
+                        pd.concat([st.session_state.df_data, df_baru])
+                        .drop_duplicates(subset="Tanggal", keep="last")
+                        .sort_values("Tanggal")
+                        .reset_index(drop=True)
+                    )
+                    st.success(f"✅ {len(df_baru)} baris data berhasil ditambahkan/diperbarui.")
+                    if n_invalid > 0:
+                        st.warning(
+                            f"⚠️ {n_invalid} baris dilewati karena kolom 'Tanggal' tidak valid "
+                            "(gunakan format YYYY-MM-DD)."
+                        )
         except Exception as e:
             st.error(f"Gagal membaca file: {e}")
 
