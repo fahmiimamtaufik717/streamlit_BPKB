@@ -65,6 +65,18 @@ def jalankan_forecast(df, n_bulan=12):
     """Fit ARIMA(0,1,1)+drift pada data (skala Log) lalu forecast n_bulan ke depan.
     Forecast & CI dijamin >= 0 karena ditransformasi balik dengan eksponensial."""
     df = df.sort_values("Tanggal").reset_index(drop=True)
+
+    # Validasi kontinuitas bulan: tidak boleh ada bulan yang bolong/loncat
+    tanggal_lengkap = pd.date_range(df["Tanggal"].iloc[0], df["Tanggal"].iloc[-1], freq="MS")
+    bulan_hilang = tanggal_lengkap.difference(pd.DatetimeIndex(df["Tanggal"]))
+    if len(bulan_hilang) > 0:
+        daftar_bulan = ", ".join(d.strftime("%B %Y") for d in bulan_hilang)
+        raise ValueError(
+            f"Data bulanan tidak lengkap/berurutan. Bulan berikut belum terisi: {daftar_bulan}. "
+            "Lengkapi dulu data bulan tersebut (upload CSV atau tambah manual satu per satu, "
+            "berurutan) sebelum menjalankan forecasting."
+        )
+
     ts = pd.Series(
         df["Jumlah_Pengeluaran_BPKB"].values,
         index=pd.DatetimeIndex(df["Tanggal"], freq="MS"),
@@ -250,8 +262,11 @@ with tab1:
             st.warning("Data historis minimal 12 bulan diperlukan untuk menjalankan model.")
         else:
             with st.spinner("Model sedang memproses data dan menghitung forecast..."):
-                ts, model, df_fc = jalankan_forecast(st.session_state.df_data, n_bulan_forecast)
-                st.session_state.hasil_forecast = (ts, df_fc)
+                try:
+                    ts, model, df_fc = jalankan_forecast(st.session_state.df_data, n_bulan_forecast)
+                    st.session_state.hasil_forecast = (ts, df_fc)
+                except ValueError as e:
+                    st.error(f"⚠️ {e}")
 
     if st.session_state.hasil_forecast is not None:
         ts, df_fc = st.session_state.hasil_forecast
